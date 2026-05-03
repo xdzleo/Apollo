@@ -710,7 +710,9 @@ namespace nvhttp {
       std::ostringstream data;
 
       pt::write_xml(data, tree);
-      response->write(data.str());
+      SimpleWeb::CaseInsensitiveMultimap _headers_xml;
+      _headers_xml.emplace("Content-Type", "application/xml; charset=utf-8");
+      response->write(SimpleWeb::StatusCode::success_ok, data.str(), _headers_xml);
       response->close_connection_after_response = true;
     });
 
@@ -1008,7 +1010,9 @@ namespace nvhttp {
     std::ostringstream data;
 
     pt::write_xml(data, tree);
-    response->write(data.str());
+    SimpleWeb::CaseInsensitiveMultimap headers;
+    headers.emplace("Content-Type", "application/xml; charset=utf-8");
+    response->write(SimpleWeb::StatusCode::success_ok, data.str(), headers);
     response->close_connection_after_response = true;
   }
 
@@ -1075,7 +1079,9 @@ namespace nvhttp {
       std::ostringstream data;
 
       pt::write_xml(data, tree);
-      response->write(data.str());
+      SimpleWeb::CaseInsensitiveMultimap _headers_xml;
+      _headers_xml.emplace("Content-Type", "application/xml; charset=utf-8");
+      response->write(SimpleWeb::StatusCode::success_ok, data.str(), _headers_xml);
       response->close_connection_after_response = true;
     });
 
@@ -1156,7 +1162,9 @@ namespace nvhttp {
       std::ostringstream data;
 
       pt::write_xml(data, tree);
-      response->write(data.str());
+      SimpleWeb::CaseInsensitiveMultimap _headers_xml;
+      _headers_xml.emplace("Content-Type", "application/xml; charset=utf-8");
+      response->write(SimpleWeb::StatusCode::success_ok, data.str(), _headers_xml);
       response->close_connection_after_response = true;
     });
 
@@ -1353,7 +1361,9 @@ namespace nvhttp {
       std::ostringstream data;
 
       pt::write_xml(data, tree);
-      response->write(data.str());
+      SimpleWeb::CaseInsensitiveMultimap _headers_xml;
+      _headers_xml.emplace("Content-Type", "application/xml; charset=utf-8");
+      response->write(SimpleWeb::StatusCode::success_ok, data.str(), _headers_xml);
       response->close_connection_after_response = true;
     });
 
@@ -1464,7 +1474,9 @@ namespace nvhttp {
       std::ostringstream data;
 
       pt::write_xml(data, tree);
-      response->write(data.str());
+      SimpleWeb::CaseInsensitiveMultimap _headers_xml;
+      _headers_xml.emplace("Content-Type", "application/xml; charset=utf-8");
+      response->write(SimpleWeb::StatusCode::success_ok, data.str(), _headers_xml);
       response->close_connection_after_response = true;
     });
 
