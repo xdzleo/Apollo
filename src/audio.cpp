@@ -105,10 +105,23 @@ namespace audio {
 
     opus_multistream_encoder_ctl(opus.get(), OPUS_SET_BITRATE(stream.bitrate));
     opus_multistream_encoder_ctl(opus.get(), OPUS_SET_VBR(0));
+    // Inband FEC eliminates audible glitches on isolated packet loss (huge
+    // perceptual win for game streaming over imperfect links). Complexity 5
+    // is transparent and halves encoder CPU; 16-bit LSB depth is a hint for
+    // 16-bit input. Tell the encoder to expect ~5% loss so FEC payload sizes
+    // are right-sized.
+    opus_multistream_encoder_ctl(opus.get(), OPUS_SET_COMPLEXITY(5));
+    opus_multistream_encoder_ctl(opus.get(), OPUS_SET_INBAND_FEC(1));
+    opus_multistream_encoder_ctl(opus.get(), OPUS_SET_PACKET_LOSS_PERC(5));
+    opus_multistream_encoder_ctl(opus.get(), OPUS_SET_LSB_DEPTH(16));
+    // F24: explicitly disable DTX. Some encoders auto-enable DTX with
+    // INBAND_FEC, which inserts silence frames during quiet periods —
+    // unwanted for game streaming where we want a continuous bitstream.
+    opus_multistream_encoder_ctl(opus.get(), OPUS_SET_DTX(0));
 
     BOOST_LOG(info) << "Opus initialized: "sv << stream.sampleRate / 1000 << " kHz, "sv
                     << stream.channelCount << " channels, "sv
-                    << stream.bitrate / 1000 << " kbps (total), LOWDELAY"sv;
+                    << stream.bitrate / 1000 << " kbps (total), LOWDELAY+FEC"sv;
 
     auto frame_size = config.packetDuration * stream.sampleRate / 1000;
     while (auto sample = samples->pop()) {

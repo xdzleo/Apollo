@@ -1092,7 +1092,9 @@ namespace platf {
         win32_priority = THREAD_PRIORITY_ABOVE_NORMAL;
         break;
       case thread_priority_e::critical:
-        win32_priority = THREAD_PRIORITY_HIGHEST;
+        // TIME_CRITICAL (31) wins ties against NVENC kernel threads and DWM
+        // (both at HIGHEST/15), reducing capture+encode tail latency under load.
+        win32_priority = THREAD_PRIORITY_TIME_CRITICAL;
         break;
       default:
         BOOST_LOG(error) << "Unknown thread priority: "sv << (int) priority;

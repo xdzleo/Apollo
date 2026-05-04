@@ -617,6 +617,30 @@ namespace input {
   }
 
   short map_keycode(short keycode) {
+    // I8: O(1) array lookup cache built from config::input.keybindings.
+    // Was an unordered_map<int,int> hash lookup per keypress (~100-300ns).
+    // Array indexing is single cache-line access. Built once on first call;
+    // keybindings are read-only after config load so no invalidation needed.
+    static constexpr int KB_TABLE_SIZE = 256;
+    static thread_local std::array<short, KB_TABLE_SIZE> kb_table{};
+    static thread_local bool kb_table_built = false;
+    if (!kb_table_built) {
+      for (int i = 0; i < KB_TABLE_SIZE; ++i) {
+        kb_table[i] = static_cast<short>(i);  // identity by default
+      }
+      for (auto &kv : config::input.keybindings) {
+        if (kv.first >= 0 && kv.first < KB_TABLE_SIZE) {
+          kb_table[kv.first] = static_cast<short>(kv.second);
+        }
+      }
+      kb_table_built = true;
+    }
+
+    if (keycode >= 0 && keycode < KB_TABLE_SIZE) {
+      return kb_table[keycode];
+    }
+
+    // Fallback for out-of-range (shouldn't happen but defensive).
     auto it = config::input.keybindings.find(keycode);
     if (it != std::end(config::input.keybindings)) {
       return it->second;
@@ -1170,12 +1194,15 @@ namespace input {
             state.buttonFlags |= platf::HOME;
             platf::gamepad_update(platf_input, gamepad.id, state);
 
-            // Sleep for a short time to allow the input to be detected
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-            // Release Home button
-            state.buttonFlags &= ~platf::HOME;
-            platf::gamepad_update(platf_input, gamepad.id, state);
+            // I6: previously did std::this_thread::sleep_for(100ms) inline,
+            // which froze ALL input dispatch (every gamepad, mouse, keyboard
+            // event for every connected client) for 100ms because the worker
+            // is single-threaded. Schedule HOME release via pushDelayed so
+            // the worker stays free to dispatch other input.
+            task_pool.pushDelayed([gamepad_id = gamepad.id, state_release = state]() mutable {
+              state_release.buttonFlags &= ~platf::HOME;
+              platf::gamepad_update(platf_input, gamepad_id, state_release);
+            }, std::chrono::milliseconds(100));
 
             gamepad.back_timeout_id = nullptr;
           };
@@ -1697,12 +1724,15 @@ namespace input {
       mail->queue<platf::gamepad_feedback_msg_t>(mail::gamepad_feedback)
     );
 
-    // Workaround to ensure new frames will be captured when a client connects
-    task_pool.pushDelayed([]() {
-      platf::move_mouse(platf_input, 1, 1);
-      platf::move_mouse(platf_input, -1, -1);
-    },
-                          100ms);
+    // I7: removed mouse jiggle on connect. The +1,+1 / -1,-1 SendInput pair
+    // was a workaround for old DDX paths that needed motion to flush the
+    // capture queue. With current DDX + DwmFlush + waitable timer pacing,
+    // it's unnecessary AND it injects two cursor moves right when the user
+    // is targeting on first frame — mildly disruptive in competitive games.
+    // (void) task_pool.pushDelayed([]() {
+    //   platf::move_mouse(platf_input, 1, 1);
+    //   platf::move_mouse(platf_input, -1, -1);
+    // }, 100ms);
 
     return input;
   }

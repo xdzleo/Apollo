@@ -137,6 +137,12 @@ namespace nvenc {
                                                          ///< Should be set in `init_library()`.
     NV_ENC_REGISTERED_PTR registered_input_buffer = nullptr;  ///< Platform-specific input surface registered with `NvEncRegisterResource()`.
                                                               ///< Should be set in `create_and_register_input_buffer()`.
+
+    // F31: persistent mapping of the registered input resource. The registered
+    // resource never changes between init and destroy, so we map it once at
+    // init and reuse the handle every frame, instead of map/unmap per frame.
+    NV_ENC_INPUT_PTR mapped_input_resource = nullptr;
+    NV_ENC_BUFFER_FORMAT mapped_input_format = NV_ENC_BUFFER_FORMAT_UNDEFINED;
     void *async_event_handle = nullptr;  ///< (optional) Platform-specific handle of event object event.
                                          ///< Can be set in constructor or `init_library()`, must override `wait_for_async_event()`.
 

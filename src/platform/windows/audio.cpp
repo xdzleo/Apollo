@@ -315,15 +315,34 @@ namespace platf::audio {
                       << ((mixer_waveformat->nSamplesPerSec != 48000) ? "will be resampled to 48000 by Windows"sv : "no resampling needed"sv);
     }
 
+    // F18: shrink WASAPI shared-mode buffer to 3ms (in 100-ns units) instead
+    // of letting Windows pick the default ~10ms period. Drops audio capture
+    // latency from ~10ms to ~3ms. Loopback sometimes ignores sub-default
+    // periods on certain drivers; if Initialize fails we fall back to default.
+    REFERENCE_TIME hns_buffer_3ms = 30000;
     status = audio_client->Initialize(
       AUDCLNT_SHAREMODE_SHARED,
       AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
         AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,  // Enable automatic resampling to 48 KHz
-      0,
+      hns_buffer_3ms,
       0,
       (LPWAVEFORMATEX) &capture_waveformat,
       nullptr
     );
+    if (status) {
+      // Fallback to default buffer period if 3ms request was rejected.
+      BOOST_LOG(warning) << "WASAPI Initialize with 3ms buffer failed (0x"
+                         << util::hex(status).to_string_view() << "), retrying with default period";
+      status = audio_client->Initialize(
+        AUDCLNT_SHAREMODE_SHARED,
+        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK |
+          AUDCLNT_STREAMFLAGS_AUTOCONVERTPCM | AUDCLNT_STREAMFLAGS_SRC_DEFAULT_QUALITY,
+        0,
+        0,
+        (LPWAVEFORMATEX) &capture_waveformat,
+        nullptr
+      );
+    }
 
     if (status) {
       BOOST_LOG(error) << "Couldn't initialize audio client for ["sv << format.name << "]: [0x"sv << util::hex(status).to_string_view() << ']';

@@ -26,47 +26,36 @@ pkg_check_modules(CURL REQUIRED libcurl)
 pkg_check_modules(MINIUPNP miniupnpc REQUIRED)
 include_directories(SYSTEM ${MINIUPNP_INCLUDE_DIRS})
 
-# ffmpeg pre-compiled binaries
+# ffmpeg pre-compiled binaries — local build patch (do not include in upstream PRs).
+# Platform libs always set so they resolve when FFMPEG_PREPARED_BINARIES is passed
+# via cache. Optional codec libs included only if present in the binaries dir.
+if(WIN32)
+    set(FFMPEG_PLATFORM_LIBRARIES mfplat ole32 strmiids mfuuid vpl)
+elseif(UNIX AND NOT APPLE)
+    set(FFMPEG_PLATFORM_LIBRARIES numa va va-drm va-x11 X11)
+endif()
 if(NOT DEFINED FFMPEG_PREPARED_BINARIES)
-    if(WIN32)
-        set(FFMPEG_PLATFORM_LIBRARIES mfplat ole32 strmiids mfuuid vpl)
-    elseif(UNIX AND NOT APPLE)
-        set(FFMPEG_PLATFORM_LIBRARIES numa va va-drm va-x11 X11)
-    endif()
     set(FFMPEG_PREPARED_BINARIES
             "${CMAKE_SOURCE_DIR}/third-party/build-deps/dist/${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_PROCESSOR}")
+endif()
+if(NOT EXISTS "${FFMPEG_PREPARED_BINARIES}")
+    message(FATAL_ERROR "FFmpeg pre-compiled binaries not found at ${FFMPEG_PREPARED_BINARIES}.")
+endif()
 
-    # check if the directory exists
-    if(NOT EXISTS "${FFMPEG_PREPARED_BINARIES}")
-        message(FATAL_ERROR
-                "FFmpeg pre-compiled binaries not found at ${FFMPEG_PREPARED_BINARIES}. \
-                Please consider contributing to the LizardByte/build-deps repository. \
-                Optionally, you can use the FFMPEG_PREPARED_BINARIES option to specify the path to the \
-                system-installed FFmpeg libraries")
+set(FFMPEG_OPTIONAL_LIBS "")
+foreach(lib libSvtAv1Enc libx264 libx265 libhdr10plus)
+    if(EXISTS "${FFMPEG_PREPARED_BINARIES}/lib/${lib}.a")
+        list(APPEND FFMPEG_OPTIONAL_LIBS "${FFMPEG_PREPARED_BINARIES}/lib/${lib}.a")
     endif()
+endforeach()
 
-    if(EXISTS "${FFMPEG_PREPARED_BINARIES}/lib/libhdr10plus.a")
-        set(HDR10_PLUS_LIBRARY
-                "${FFMPEG_PREPARED_BINARIES}/lib/libhdr10plus.a")
-    endif()
-    set(FFMPEG_LIBRARIES
-            "${FFMPEG_PREPARED_BINARIES}/lib/libavcodec.a"
-            "${FFMPEG_PREPARED_BINARIES}/lib/libswscale.a"
-            "${FFMPEG_PREPARED_BINARIES}/lib/libavutil.a"
-            "${FFMPEG_PREPARED_BINARIES}/lib/libcbs.a"
-            "${FFMPEG_PREPARED_BINARIES}/lib/libSvtAv1Enc.a"
-            "${FFMPEG_PREPARED_BINARIES}/lib/libx264.a"
-            "${FFMPEG_PREPARED_BINARIES}/lib/libx265.a"
-            ${HDR10_PLUS_LIBRARY}
-            ${FFMPEG_PLATFORM_LIBRARIES})
-else()
-    set(FFMPEG_LIBRARIES
+set(FFMPEG_LIBRARIES
         "${FFMPEG_PREPARED_BINARIES}/lib/libavcodec.a"
         "${FFMPEG_PREPARED_BINARIES}/lib/libswscale.a"
         "${FFMPEG_PREPARED_BINARIES}/lib/libavutil.a"
         "${FFMPEG_PREPARED_BINARIES}/lib/libcbs.a"
+        ${FFMPEG_OPTIONAL_LIBS}
         ${FFMPEG_PLATFORM_LIBRARIES})
-endif()
 
 set(FFMPEG_INCLUDE_DIRS
         "${FFMPEG_PREPARED_BINARIES}/include")

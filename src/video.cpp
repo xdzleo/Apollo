@@ -826,9 +826,9 @@ namespace video {
       },
       {
         // SDR-specific options
+        // NOTE: Apollo removed 'profile' from config_t (Sunshine merge leftover,
+        // AMD AMF only — irrelevant for NVENC users). Default to high profile.
         {"profile"s, [](const config_t &cfg) {
-           if (cfg.profile == 66) return "baseline"s;
-           if (cfg.profile == 77) return "main"s;
            return "high"s;
          }},
       },

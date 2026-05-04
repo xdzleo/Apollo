@@ -705,10 +705,17 @@ namespace stream {
           shards_p[data_shards + x] = (uint8_t *) &shards[(parity_shard_offset + x) * blocksize];
         }
 
-        // packets = parity_shards + data_shards
-        rs_t rs {reed_solomon_new(data_shards, parity_shards)};
-
-        reed_solomon_encode(rs.get(), shards_p.begin(), nr_shards, blocksize);
+        // F19: cache reed_solomon contexts thread-local instead of allocating
+        // a fresh one (with matrix init) per frame. At 240fps that was ~960
+        // mallocs/sec on the hot path. Encoder is stateless given matrix.
+        struct rs_cache_key { int d; int p; };
+        static thread_local std::unordered_map<uint64_t, rs_t> rs_cache;
+        uint64_t rs_key = (uint64_t(uint32_t(data_shards)) << 32) | uint32_t(parity_shards);
+        auto rs_it = rs_cache.find(rs_key);
+        if (rs_it == rs_cache.end()) {
+          rs_it = rs_cache.emplace(rs_key, rs_t {reed_solomon_new(data_shards, parity_shards)}).first;
+        }
+        reed_solomon_encode(rs_it->second.get(), shards_p.begin(), nr_shards, blocksize);
       }
 
       return {
@@ -1460,8 +1467,14 @@ namespace stream {
       }
 
       try {
-        // Use around 80% of 1Gbps          1Gbps            percent    ms     packet      byte
-        size_t ratecontrol_packets_in_1ms = std::giga::num * 80 / 100 / 1000 / blocksize / 8;
+        // F14: BRUTAL LAN PACING — was hardcoded 80% of 1Gbps which artificially
+        // throttled per-frame burst egress on LAN. We're on a 1Gbps link to
+        // friends (LAN/WG/Tailscale-direct) and want each frame to flush at
+        // near link rate, not be smoothed across the whole frame interval.
+        // 5x giga (5 Gbps allowance per ms) effectively removes pacing as a
+        // bottleneck; the kernel SO_SNDBUF + the 64K send-batch limit below
+        // still keep us off the cliff.
+        size_t ratecontrol_packets_in_1ms = std::giga::num * 5 / 1000 / blocksize / 8;
 
         // Send less than 64K in a single batch.
         // On Windows, batches above 64K seem to bypass SO_SNDBUF regardless of its size,

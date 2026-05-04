@@ -254,15 +254,20 @@ namespace platf::dxgi {
           frame_pacing_group_frames = 0;
           status = capture_e::timeout;
         } else {
+          // F20: tighten sleep guard from 2ms to 1ms. The Win10+ high-resolution
+          // waitable timer typically overshoots <0.2ms; the 2ms guard left
+          // ~1.8ms of pure idle wait per frame on the table. snapshot()'s
+          // elastic timeout drops accordingly so we still poll AcquireNextFrame
+          // for the same window — just starting closer to vsync.
           bool elastic = false;
-          if (sleep_period >= 2ms) {
+          if (sleep_period >= 1ms) {
             elastic = true;
-            timer->sleep_for(sleep_period - 2ms);
+            timer->sleep_for(sleep_period - 1ms);
             sleep_overshoot_logger.first_point(sleep_target);
             sleep_overshoot_logger.second_point_now_and_log();
           }
 
-          status = snapshot(pull_free_image_cb, img_out, elastic ? 2ms : std::chrono::duration_cast<std::chrono::milliseconds>(sleep_period), *cursor);
+          status = snapshot(pull_free_image_cb, img_out, elastic ? 1ms : std::chrono::duration_cast<std::chrono::milliseconds>(sleep_period), *cursor);
 
           if (status == capture_e::ok && img_out) {
             frame_pacing_group_frames += 1;
@@ -304,7 +309,11 @@ namespace platf::dxgi {
           // To avoid starving the encoding thread, sleep without the lock held for a little
           // while each time we reach our max frame timeout. This will only happen when nothing
           // is updating the display, so no visible stutter should be introduced by the sleep.
-          std::this_thread::sleep_for(10ms);
+          // F22: use the high-res waitable timer instead of std::this_thread::sleep_for.
+          // Default scheduler granularity on Windows is 15.6ms, so a "10ms" sleep here
+          // would actually sleep ~16ms, dropping a frame on idle->active transitions
+          // (e.g., a static menu suddenly starts moving).
+          timer->sleep_for(10ms);
         }
       }
 

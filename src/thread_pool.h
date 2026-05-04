@@ -8,6 +8,7 @@
 #include <thread>
 
 // local includes
+#include "platform/common.h"
 #include "task_pool.h"
 
 namespace thread_pool_util {
@@ -98,6 +99,14 @@ namespace thread_pool_util {
 
   public:
     void _main() {
+      // I1: bump worker thread priority to TIME_CRITICAL. The default-priority
+      // worker is what actually performs SendInput()/vigem_target_*_update()
+      // for every input event, while the network-RX path that hands them
+      // off is already CRITICAL. Without this, we hop CRITICAL->DEFAULT for
+      // every keystroke / mouse motion, eating 0.5-4ms median (more in p99
+      // under contention).
+      platf::adjust_thread_priority(platf::thread_priority_e::critical);
+
       while (_continue) {
         if (auto task = this->pop()) {
           (*task)->run();

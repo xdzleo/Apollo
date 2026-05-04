@@ -456,6 +456,18 @@ namespace rtsp_stream {
 
       auto socket = std::move(next_socket);
 
+      // Disable Nagle on every accepted RTSP control connection.
+      // SETUP/ANNOUNCE messages are tiny; with Nagle on, the OS can sit on
+      // them for up to 40 ms waiting for the next byte, adding visible delay
+      // to session establishment and any runtime control message.
+      {
+        boost::system::error_code nodelay_ec;
+        socket->sock.set_option(boost::asio::ip::tcp::no_delay(true), nodelay_ec);
+        if (nodelay_ec) {
+          BOOST_LOG(debug) << "RTSP TCP_NODELAY set failed: "sv << nodelay_ec.message();
+        }
+      }
+
       auto launch_session {launch_event.view(0s)};
       if (launch_session) {
         // Associate the current RTSP session with this socket and start reading
