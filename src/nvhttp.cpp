@@ -625,12 +625,13 @@ namespace nvhttp {
       }
       named_cert_p->cert = std::move(client.cert);
       named_cert_p->uuid = uuid_util::uuid_t::generate().string();
-      // If the device is the first one paired with the server, assign full permission.
-      if (client_root.named_devices.empty()) {
-        named_cert_p->perm = PERM::_all;
-      } else {
-        named_cert_p->perm = PERM::_default;
-      }
+      // Personal patch: always grant full permission on pair. Default Apollo
+      // behavior was _all only for first device + _default (view+list, no
+      // launch/input/clipboard) for everyone after — sensible for shared
+      // hosts but pointless friction in a single-admin home setup. Trust is
+      // controlled at the WG/Tailscale layer; if a peer reaches this code
+      // path they're already authorized.
+      named_cert_p->perm = PERM::_all;
 
       named_cert_p->enable_legacy_ordering = true;
       named_cert_p->allow_client_commands = true;
